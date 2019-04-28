@@ -1,6 +1,8 @@
 import numpy as np 
 import scipy.optimize
 import enum
+import math
+from functools import partial
 
 class ProblemBase(object):
     """
@@ -111,8 +113,8 @@ class TranscribedProblem(object):
         @param      problem     The original continuous problem of type ProblemBase
         @param      int_list    Represents what sort of integration to be used at each state knot point
                                 This can either be None, which defaults to TRAPEZOIDAL for all knot points
-                                or you can give a list (of length N) of IntegrationType that represents
-                                the integration method to be used at each state knot point
+                                or you can give a list (of length N-1) of IntegrationType where the i'th entry represents
+                                the integration method to be used between the i'th and (i+1)'th knot point
                                 For convinience, if instead of a list, a pure IntegrationType variable is passed in,
                                 it will use that type for every knot point      
         """
@@ -122,13 +124,13 @@ class TranscribedProblem(object):
 
         # validating/generating int_list
         if int_list is None:
-            self.int_list = [IntegrationType.TRAPEZOIDAL for _ in range(N)]
+            self.int_list = [IntegrationType.TRAPEZOIDAL for _ in range(N-1)]
         else:
             if type(int_list) == IntegrationType:
-                self.int_list = [int_list for _ in range(N)]
+                self.int_list = [int_list for _ in range(N-1)]
             else:
-                if len(int_list) != N:
-                    raise Exception("Collation list not right size")
+                if len(int_list) != (N-1):
+                    raise Exception("Collation list not right size.")
                 self.int_list = int_list
 
 
@@ -137,7 +139,7 @@ class TranscribedProblem(object):
         # is the idx for which x_i corresponds with in the variables vector.
         # This is to handle extra control variables per state timestep for higher order methods.
         self.controls_idx = [0]
-        for collation_type in self.int_list[:-1]:
+        for collation_type in self.int_list:
             if collation_type == IntegrationType.TRAPEZOIDAL:
                 self.controls_idx.append(self.controls_idx[-1] + 1)
             elif collation_type == IntegrationType.HERMITE_SIMPSON:
@@ -151,7 +153,7 @@ class TranscribedProblem(object):
         # generating time steps for control knot points (and all intermediate knot points)
         dt = problem.T() / (self.N - 1)
         self.t_u = [0]
-        for collation_type in self.int_list[:-1]:
+        for collation_type in self.int_list:
             if collation_type == IntegrationType.TRAPEZOIDAL:
                 self.t_u.append(self.t_u[-1] + dt)
             elif collation_type == IntegrationType.HERMITE_SIMPSON:
@@ -201,9 +203,6 @@ class TranscribedProblem(object):
             else:
                 raise Exception("Not valid collation type.")
 
-        # print(str(obj) + ": " + str(variables.transpose()))
-        # import pdb
-        # pdb.set_trace()
         return obj
 
     def sys_constraints(self, variables):
@@ -295,6 +294,97 @@ class TranscribedProblem(object):
         return u, x, self.t_u, self.t
 
 
+    def construct_piecewise_trajectory(self, variables, return_func=True):
+        """
+        @brief      Constructs a piece wise trajectory from the variables
+
+        @details    Trapezoidal approximation will yield linear control/quadratic state pieces
+                    Hermite-Simpson will yield quadratic control/cubic state pieces
+        
+                    if return_func is True,
+                    Then this function will return (u_func, x_func)
+                    where u_func is a function that takes in a time, t (from 0 to problem.T),
+                    and spits out a np.array of length control_dim that corresponds with u(t)
+                    simlarily, x_func takes in a time, t, 
+                    and spits out a np.array of length state_dim that corresponds with x(t)
+
+                    if return_func is False,
+                    it will return (t_list, u_poly, x_poly) 
+                    which t_list are the time knot points, and u_poly and x_poly are lists of control and state coefficients 
+                    that can be used with poly_func (see poly_func for a detailed description)
+
+        @param      variables    The variables
+        @param      return_func  if True, return a python function for the trajectory. If False, return coefficients
+        """
+        N = self.N
+        state_dim = self.problem.state_dim()
+        control_dim = self.problem.control_dim()
+
+        u, x, t_u, t_x = self.parse_variables(variables)
+
+        u_polynomials = []
+        x_polynomials = []
+        for i, collation_type in enumerate(self.int_list):
+            j = self.controls_idx[i]
+        
+            x_i = x[i, :]
+            x_ip1 = x[i+1, :]
+            h = self.h[i]
+
+            if collation_type == IntegrationType.TRAPEZOIDAL:
+                u_j = u[j, :]
+                u_jp1 = u[j+1, :]
+
+                u_poly = np.zeros((2, control_dim))
+                u_poly[0, :] = (u_jp1 - u_j) / h
+                u_poly[1, :] = u_j
+
+                x_poly = np.zeros((3, state_dim))
+                f_i = self.problem.f(x_i, u_j)
+                f_ip1 = self.problem.f(x_ip1, u_jp1)
+
+                x_poly[0, :] = (f_ip1 - f_i) / (2 * h)
+                x_poly[1, :] = f_i
+                x_poly[2, :] = x_i
+
+                u_polynomials.append(u_poly)
+                x_polynomials.append(x_poly)
+
+            elif collation_type == IntegrationType.HERMITE_SIMPSON:
+                u_j = u[j, :]
+                u_jphalf = u[j+1, :]
+                u_jp1 = u[j+2, :]
+
+                f_i = self.problem.f(x_i, u_j)
+                f_ip1 = self.problem.f(x_ip1, u_jp1)
+                x_iphalf = (0.5*(x_i + x_ip1)) + ((h/8)*(f_i - f_ip1))
+                f_iphalf = self.problem.f(x_iphalf, u_jphalf)
+
+                u_poly = np.zeros((3, control_dim))
+                u_poly[0, :] = (1.0/(h**2))*(2*u_j - 4*u_jphalf + 2*u_jp1)
+                u_poly[1, :] = (1.0/h)*(-3*u_j + 4*u_jphalf - u_jp1)
+                u_poly[2, :] = u_j
+
+                # NOTE: I believe Equation 4.13 in  
+                # http://www.matthewpeterkelly.com/research/MatthewKelly_IntroTrajectoryOptimization_SIAM_Review_2017.pdf
+                # is incorrect. the linear, quadratic, and cubic terms are off by a factor of h
+                x_poly = np.zeros((4, state_dim))
+                x_poly[0, :] = (1.0/(h**2))*(1.0/3)*(2*f_i - 4*f_iphalf + 2*f_ip1)
+                x_poly[1, :] = (1.0/h)*(0.5)*(-3*f_i + 4*f_iphalf - f_ip1)
+                x_poly[2, :] = f_i
+                x_poly[3, :] = x_i
+
+                u_polynomials.append(u_poly)
+                x_polynomials.append(x_poly)
+            else:
+                raise Exception("Not a valid integration type.")
+
+        if return_func:
+            return partial(poly_func, t_x, u_polynomials), partial(poly_func, t_x, x_polynomials)
+        else:
+            return t_x, u_polynomials, x_polynomials
+
+
     def _trapezoidal(self, h, f, x_i, x_ip1, u_i, u_ip1):
         integral = 0.5*h*(f(x_i, u_i) + f(x_ip1, u_ip1))
         return integral
@@ -308,6 +398,55 @@ class TranscribedProblem(object):
         integral = (1./6)*h*(f_i + 4*f_iphalf + f_ip1)
 
         return integral
+
+
+
+def poly_func(t_list, poly_list, t):
+    """
+    @brief      evaluates a piecewise polynomial function (vector valued), represented by t_list and poly_list
+                at a specific time, t
+    
+    @details    poly_list[i] corresponds with the coefficients to be used between times t_list[i] and t_list[i+1]
+                an entry in poly_list is a np.array of size (p by m)
+                where (p+1) is the order of the polynomial and m is the dimension of the function output
+                Thus, poly_list[i][-1, :] is a np.array of size m where each entry is the constant component of the polynomial function
+                for a specific dimension
+
+                The polynomial coefficients must be defined such that they take in delta times, dt.
+                where poly_list[i] will operate on dt = (t - t_list[i])
+    
+    @param      t_list     time knot points of length N
+    @param      poly_list  coefficient list of length (N-1)
+    @param      t          time to evaluate function at
+    """
+    assert(len(poly_list) > 0)
+    assert(len(poly_list) == len(t_list)-1)
+
+    # idx is the index into t_list such that
+    # t_list[idx] <= t < t_list[idx+1]
+    idx = 0
+    while (t >= t_list[idx]):
+        idx += 1
+
+        # if past last segment
+        # set t to be last time possible
+        if (idx >= len(t_list)):
+            idx = len(t_list)-1
+            t = t_list[-1]
+            break;
+    idx -= 1
+
+    # if we are before the first time, return the f(0)
+    if idx < 0:
+        return poly_list[0][-1, :]
+
+
+    dt = t - t_list[idx] 
+    val = np.zeros(poly_list[0].shape[1])
+    for power, coeff in enumerate(reversed(poly_list[idx])):
+        val += coeff * (math.pow(dt, power))
+
+    return val
 
 
 

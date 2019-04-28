@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from functools import partial
 from transcription import *
 
 class DoubleIntegratorMinimumForce(ProblemBase):
@@ -59,45 +60,75 @@ class PendulumMinimumTorque(object):
         cost = control[0]**2
         return cost
 
-def plot_block(u, x, t_u, t_x):
-    analytic_t = np.linspace(0, 1, 100)
-    analytic_control = 6 - 12*analytic_t
-    analytic_pos = 3*np.square(analytic_t) - 2*np.power(analytic_t, 3)
-    analytic_vel = 6*analytic_t - 6*np.square(analytic_t)
+
+
+def plot_block(transcribed_problem, sol_vars):
+    # values of u and x at knot points
+    u, x, t_u, t_x = transcribed_problem.parse_variables(sol_vars)
+
+    # the actual piecewise trajectory the solution takes on
+    u_func, x_func = transcribed_problem.construct_piecewise_trajectory(sol_vars)
+
+    times = np.linspace(0, 1, 100)
+
+    traj_u = np.array(list(map(u_func, times)))
+    traj_x = np.array(list(map(x_func, times)))
+
+    # analytic solution to the double integrator problem
+    analytic_control = 6 - 12*times
+    analytic_pos = 3*np.square(times) - 2*np.power(times, 3)
+    analytic_vel = 6*times - 6*np.square(times)
+
 
     plt.figure(1)
     plt.subplot(3, 1, 1)
-    plt.plot(analytic_t, analytic_control, label='analytic')
-    plt.plot(t_u, u[:, 0], linestyle="--", label='optimizer')
+    plt.plot(times, analytic_control, c='steelblue', label='analytic')
+    plt.plot(times, traj_u, c='salmon', linestyle='--', label='analytic')
+    plt.scatter(t_u, u[:, 0], c='salmon', label='optimized')
     plt.ylabel("control (m/s/s)")
     plt.legend()
 
     plt.subplot(3, 1, 2)
-    plt.plot(analytic_t, analytic_pos, label='analytic')
-    plt.plot(t_x, x[:, 0], linestyle="--", label='optimizer')
+    plt.plot(times, analytic_pos, label='analytic')
+    plt.plot(times, traj_x[:, 0], c='salmon', linestyle='--', label='analytic')
+    plt.scatter(t_x, x[:, 0], c='salmon', label='optimized')
     plt.ylabel("position (m)")
 
     plt.subplot(3, 1, 3)
-    plt.plot(analytic_t, analytic_vel, label='analytic')
-    plt.plot(t_x, x[:, 1], linestyle="--", label='optimizer')
+    plt.plot(times, analytic_vel, label='analytic')
+    plt.plot(times, traj_x[:, 1], c='salmon', linestyle='--', label='analytic')
+    plt.scatter(t_x, x[:, 1], c='salmon', label='optimized')
     plt.ylabel("velocity (m)")
 
     plt.xlabel("time (s)")
 
     plt.show()
 
-def plot_pendulum(u, x, t_u, t_x):
+def plot_pendulum(transcribed_problem, sol_vars):
+    # values of u and x at knot points
+    u, x, t_u, t_x = transcribed_problem.parse_variables(sol_vars)
+
+    # the actual piecewise trajectory the solution takes on
+    u_func, x_func = transcribed_problem.construct_piecewise_trajectory(sol_vars)
+
+    times = np.linspace(0, problem.T(), 100)
+    traj_u = np.array(list(map(u_func, times)))
+    traj_x = np.array(list(map(x_func, times)))
+
     plt.figure(1)
     plt.subplot(3, 1, 1)
-    plt.plot(t_u, u[:, 0], linestyle="--")
+    plt.plot(times, traj_u[:, 0], c='salmon', linestyle='--')
+    plt.scatter(t_u, u[:, 0], c='salmon')
     plt.ylabel("control (rad/s/s)")
 
     plt.subplot(3, 1, 2)
-    plt.plot(t_x, x[:, 0], linestyle="--")
+    plt.plot(times, traj_x[:, 0], c='salmon', linestyle='--')
+    plt.scatter(t_x, x[:, 0], c='salmon')
     plt.ylabel("theta (rad)")
 
     plt.subplot(3, 1, 3)
-    plt.plot(t_x, x[:, 1], linestyle="--")
+    plt.plot(times, traj_x[:, 1], c='salmon', linestyle='--')
+    plt.scatter(t_x, x[:, 1], c='salmon')
     plt.ylabel("theta/s (rad/s)")
 
     plt.xlabel("time (s)")
@@ -174,14 +205,12 @@ if __name__ == '__main__':
         print(sol.message)
         exit()
     print("Solution found in " + str(sol.nit) + " iterations.")
+
     sol_vars = sol.x
-    u, x, t_u, t_x = transcribed_problem.parse_variables(sol_vars)
-
-
     if args.problem == "block":
-        plot_block(u, x, t_u, t_x)
+        plot_block(transcribed_problem, sol_vars)
     else:
-        plot_pendulum(u, x, t_u, t_x)
+        plot_pendulum(transcribed_problem, sol_vars)
 
 
 
