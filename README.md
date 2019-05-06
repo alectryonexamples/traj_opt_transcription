@@ -23,8 +23,6 @@ To run analysis:
 
 ![Alt text](readme_images/block.png?raw=true "double integrator data")
 ![Alt text](readme_images/pendulum.png?raw=true "pendulum data")
-
-Error on double integrator
 ![Alt text](readme_images/analysis.png?raw=true "analysis data")
 
 
