@@ -84,24 +84,27 @@ def plot_block(transcribed_problem, sol_vars):
     plt.subplot(3, 1, 1)
     plt.title("Double Integrator")
     plt.plot(times, analytic_control, c='steelblue', label='analytic')
-    plt.plot(times, traj_u, c='salmon', linestyle='--', label='analytic')
-    plt.scatter(t_u, u[:, 0], c='salmon', label='optimized')
+    plt.plot(times, traj_u, c='salmon', linestyle='--', label='transcription')
+    plt.scatter(t_u, u[:, 0], c='salmon', label='knot points')
     plt.ylabel("control (m/s/s)")
     plt.legend()
+    plt.grid()
 
     plt.subplot(3, 1, 2)
     plt.plot(times, analytic_pos, label='analytic')
-    plt.plot(times, traj_x[:, 0], c='salmon', linestyle='--', label='analytic')
-    plt.scatter(t_x, x[:, 0], c='salmon', label='optimized')
+    plt.plot(times, traj_x[:, 0], c='salmon', linestyle='--', label='transcription')
+    plt.scatter(t_x, x[:, 0], c='salmon', label='knot points')
     plt.ylabel("position (m)")
+    plt.grid()
 
     plt.subplot(3, 1, 3)
     plt.plot(times, analytic_vel, label='analytic')
-    plt.plot(times, traj_x[:, 1], c='salmon', linestyle='--', label='analytic')
-    plt.scatter(t_x, x[:, 1], c='salmon', label='optimized')
+    plt.plot(times, traj_x[:, 1], c='salmon', linestyle='--', label='transcription')
+    plt.scatter(t_x, x[:, 1], c='salmon', label='knot points')
     plt.ylabel("velocity (m)")
 
     plt.xlabel("time (s)")
+    plt.grid()
 
     plt.show()
 
@@ -122,11 +125,13 @@ def plot_pendulum(transcribed_problem, sol_vars):
     plt.plot(times, traj_u[:, 0], c='salmon', linestyle='--')
     plt.scatter(t_u, u[:, 0], c='salmon')
     plt.ylabel("control (rad/s/s)")
+    plt.grid()
 
     plt.subplot(3, 1, 2)
     plt.plot(times, traj_x[:, 0], c='salmon', linestyle='--')
     plt.scatter(t_x, x[:, 0], c='salmon')
     plt.ylabel("theta (rad)")
+    plt.grid()
 
     plt.subplot(3, 1, 3)
     plt.plot(times, traj_x[:, 1], c='salmon', linestyle='--')
@@ -134,6 +139,7 @@ def plot_pendulum(transcribed_problem, sol_vars):
     plt.ylabel("theta/s (rad/s)")
 
     plt.xlabel("time (s)")
+    plt.grid()
 
     plt.show()
 
