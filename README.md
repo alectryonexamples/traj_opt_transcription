@@ -13,9 +13,11 @@ In addition, to test how errors scale with different different integration appro
 
 To run simple example:
  - python block_move_trapezoidal.py
+
 To run transcription.py stuff:
  - python plot_trajectories.py -p block -N 4 -i hermite
  - python plot_trajectories.py -p pendulum -N 31 -i trap
+ 
 To run analysis:
  - python test_errors.py
 
