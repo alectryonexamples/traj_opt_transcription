@@ -82,6 +82,7 @@ def plot_block(transcribed_problem, sol_vars):
 
     plt.figure(1)
     plt.subplot(3, 1, 1)
+    plt.title("Double Integrator")
     plt.plot(times, analytic_control, c='steelblue', label='analytic')
     plt.plot(times, traj_u, c='salmon', linestyle='--', label='analytic')
     plt.scatter(t_u, u[:, 0], c='salmon', label='optimized')
@@ -117,6 +118,7 @@ def plot_pendulum(transcribed_problem, sol_vars):
 
     plt.figure(1)
     plt.subplot(3, 1, 1)
+    plt.title("Pendulum")
     plt.plot(times, traj_u[:, 0], c='salmon', linestyle='--')
     plt.scatter(t_u, u[:, 0], c='salmon')
     plt.ylabel("control (rad/s/s)")
@@ -211,6 +213,5 @@ if __name__ == '__main__':
         plot_block(transcribed_problem, sol_vars)
     else:
         plot_pendulum(transcribed_problem, sol_vars)
-
 
 
